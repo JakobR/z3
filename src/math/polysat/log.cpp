@@ -1,14 +1,27 @@
-#ifndef _MSC_VER
-#include <unistd.h>  // for isatty
-#endif
 #include <utility>
-
 #include "util/util.h"
 #include "math/polysat/log.h"
+
+#if defined(WIN32) || defined(_WIN32)
+
+#include <io.h>  // for _isatty
+#include <stdio.h>  // for _fileno
+static int os_isatty(int fd) { return _isatty(fd); }
+static int os_fileno(FILE* stream) { return _fileno(stream); }
+
+#else
+
+#include <unistd.h>  // for isatty
+#include <stdio.h>  // for fileno
+static int os_isatty(int fd) { return isatty(fd); }
+static int os_fileno(FILE* stream) { return fileno(stream); }
+
+#endif
 
 /**
 For windows:
 https://docs.microsoft.com/en-us/cpp/c-runtime-library/reference/isatty?view=msvc-160
+https://docs.microsoft.com/en-us/cpp/c-runtime-library/reference/fileno?view=msvc-160
 
 So include <io.h> and create platform wrapper for _isatty / isatty.
 
@@ -79,27 +92,18 @@ std::pair<std::ostream&, bool>
 polysat_log(LogLevel msg_level, std::string fn, std::string /* pretty_fn */)
 {
   std::ostream& os = std::cerr;
-#if 0
-  int const fd = fileno(stderr);
+  int const fd = os_fileno(stderr);
 
   size_t width = 20;
   size_t padding = width - std::min(width, fn.size());
 
-#ifdef _MSC_VER
-  char const* color = nullptr;
-#else
   char const* color = level_color(msg_level);
-  if (color && !isatty(fd)) { color = nullptr; }
-#endif
+  if (color && !os_isatty(fd)) { color = nullptr; }
 
   if (color) { os << color; }
   os << "[" << fn << "] " << std::string(padding, ' ');
   os << std::string(polysat_log_indent_level, ' ');
   return {os, (bool)color};
-#else
-  return {os, false};
-#endif
-
 }
 
 polysat_log_indent::polysat_log_indent(int amount)
